@@ -1,18 +1,18 @@
-# Edu-RAG (Final, Stable)
+# Edu-RAG 多模态 AI 互动式教学智能体 - 模块一：本地知识库 RAG
+
+## 项目概述
 
 本仓库实现 **“多模态 AI 互动式教学智能体”** 中的 **模块一：本地知识库 RAG**，并提供 **可直接给队友集成的接口化服务层**。
 
 本版本已做稳定性收敛：
-- **Milvus Standalone（Docker）+ HNSW**（满足你“必须用 HNSW”的要求）
+- **Milvus Standalone（Docker）+ HNSW**（满足"必须用 HNSW"的要求）
 - 检索链路：**BM25 + BGE-M3（Dense+Sparse）Hybrid + RRF 融合 + 邻近块扩展 + 多样性约束 + Cross-Encoder Rerank**
 - 生成链路：**Qwen API（OpenAI-compatible）**，避免 CPU 本地推理慢
 - UI：Gradio（已对 `trace/evidence` 等字段做 **强 JSON 化**，避免 `strip()`/序列化报错）
 
----
-
 ## 1. 架构总览
 
-### 1.1 核心逻辑图（与题目一致）
+### 1.1 核心逻辑图
 
 ```
 knowledge_base/  uploads/<session_id>/
@@ -68,8 +68,6 @@ edu_rag_final/
 └── docker-compose.yml          # ✅ Milvus Standalone
 ```
 
----
-
 ## 2. 支持入库的资料类型
 
 你可以把下列类型文件放入：
@@ -86,9 +84,7 @@ edu_rag_final/
 
 > 说明：解析策略与工具均可在 `config.yaml -> parsing:` 中调整。
 
----
-
-## 3. 多模态解析与“可检索证据”统一（详细）
+## 3. 多模态解析与"可检索证据"统一
 
 所有文件最终都会被统一成可检索证据块：
 
@@ -99,19 +95,19 @@ edu_rag_final/
 ### 3.1 PDF
 1) `pdfplumber.extract_tables()`：表格 → 强制重建为 Markdown 表格文本
 2) `pdfplumber.extract_text()`：正文抽取
-3) 清洗：正则去页码/页眉页脚噪声；并做“重复页眉页脚行”移除
+3) 清洗：正则去页码/页眉页脚噪声；并做"重复页眉页脚行"移除
 4) 熔断 OCR：若某页抽取字符数 `< ocr_threshold_chars`（默认 50），判定扫描件 → OCR
 
 ### 3.2 图片
 1) OCR（tesseract）提取可见文字
-2) 智能分流：若文字稀疏/疑似图表（Hough lines） → 走 VLM（Qwen-VL）生成“可检索描述”
+2) 智能分流：若文字稀疏/疑似图表（Hough lines） → 走 VLM（Qwen-VL）生成"可检索描述"
 3) 输出文本 = OCR 文本 + VLM 描述（按配置决定）
 
 ### 3.3 视频
 1) `ffmpeg` 提取音轨 → `faster-whisper` ASR → 解说词/逐字稿
 2) `OpenCV/ffmpeg` 每 `frame_interval_sec` 秒抽帧
 3) 关键帧走 VLM（Qwen-VL）得到画面描述（可选 OCR）
-4) 合并：`ASR 文本 + 关键帧描述` → 作为“视频证据”入库
+4) 合并：`ASR 文本 + 关键帧描述` → 作为"视频证据"入库
 
 ### 3.4 音频
 - 直接 `faster-whisper` 转写，作为可检索证据文本
@@ -121,14 +117,12 @@ edu_rag_final/
 - PPT：`python-pptx` 提取每页标题/要点/备注
 
 ### 3.6 Excel
-- `openpyxl` 抽取前 `max_rows * max_cols`，转成“带表头/行列结构”的文本块
+- `openpyxl` 抽取前 `max_rows * max_cols`，转成"带表头/行列结构"的文本块
 
 ### 3.7 HTML
 - `BeautifulSoup` 去脚本样式，抽正文，保留标题/段落结构
 
----
-
-## 4. 检索质量优化（详细）
+## 4. 检索质量优化
 
 ### 4.1 真 Hybrid（Dense + Sparse）
 - BGE-M3 同时产出：
@@ -145,7 +139,7 @@ edu_rag_final/
 - 可在 `config.yaml -> retrieval.fusion` 切换为 `weighted_sum`
 
 ### 4.3 邻近块扩展（neighbor expansion）
-- 命中 chunk 后补齐 `i-1`/`i+1`，避免“只命中半段定义”导致回答缺上下文
+- 命中 chunk 后补齐 `i-1`/`i+1`，避免"只命中半段定义"导致回答缺上下文
 
 ### 4.4 多样性约束（per-doc cap）
 - 最终证据中每个文档最多保留 `final_max_per_doc` 个 chunk
@@ -155,11 +149,9 @@ edu_rag_final/
 - `bge-reranker-large` 对候选 Top-N（默认 50）重排
 - 提升最终证据精度
 
----
-
 ## 5. 与其它模块无缝结合（详细：5种整合方式）
 
-### 5.1 接口化整合（推荐，最快）
+### 5.1 接口化整合
 队友直接 import：
 
 ```python
@@ -198,17 +190,13 @@ svc.ingest_items(index="ref:demo01", session_id="demo01", items=items, reset=Fal
 - 将证据写回 Blueprint 的 `references[]` 字段
 
 ### 5.5 生态级整合（模块四生成引擎）
-模块四需要“可实证的配图”时：
+模块四需要"可实证的配图"时：
 - 直接从 evidence 的 `meta` 中获取：
   - PDF 页截图路径
   - 视频关键帧路径
 - 插入 PPT 时附带引用（`[1]`）实现可追溯
 
----
-
 ## 6. 环境与运行（WSL2 + E盘 + Docker + Conda）
-
-> 以下步骤为 **严格可复现** 的 step-by-step（从零开始）。
 
 ### 6.1 安装/启动 WSL（Windows PowerShell 管理员）
 
@@ -217,7 +205,7 @@ wsl --install -d Ubuntu-22.04
 wsl -d Ubuntu-22.04
 ```
 
-### 6.2（可选但推荐）把 WSL 迁移到 E 盘（解决 C 盘爆满）
+### 6.2（可选）把 WSL 迁移到 E 盘（解决 C 盘爆满）
 
 ```powershell
 wsl --shutdown
@@ -332,16 +320,14 @@ conda env create -f environment_wsl_cpu.yml
 conda activate edu_rag_cpu
 ```
 
----
-
-## 7. 需要下载到本地的模型（必须）
+## 7. 需要下载到本地的模型
 
 本项目（当前实现）Embedding/Rerank 以 **本地路径**加载：
 
 - `models/bge-m3/`
 - `models/bge-reranker-large/`
 
-### 7.1 使用 HuggingFace 镜像加速（国内推荐）
+### 7.1 使用 HuggingFace 镜像加速
 
 ```bash
 export HF_ENDPOINT=https://hf-mirror.com
@@ -366,8 +352,6 @@ ls models/bge-reranker-large | head
 > 注意：如果你曾经安装过 `milvus-lite` 并遇到 `pkg_resources` 相关问题：
 > - 本项目默认 **不再依赖 milvus-lite**（requirements 已注释），避免这一坑。
 
----
-
 ## 8. 调用 API 的模型（Qwen）与配置（必须）
 
 本项目 Generator/VLM 使用 **OpenAI-compatible API**。
@@ -384,8 +368,6 @@ export OPENAI_API_KEY="你的DashScopeKey"
 - 视觉理解（可选，图片/视频关键帧）：`qwen2.5-vl-7b-instruct`
 
 （可在 `config.yaml -> generator.api_model / vlm.api_model` 修改。）
-
----
 
 ## 9. 如何上传新知识库资料并入库（你最常用）
 
@@ -426,8 +408,6 @@ python -m src.rag.cli ingest \
 - `kb`
 - `ref:demo01`
 
----
-
 ## 10. 运行方式（CLI / UI / 给队友接口）
 
 ### 10.1 CLI
@@ -452,7 +432,7 @@ python -m src.rag.ui_gradio
 
 浏览器打开：`http://127.0.0.1:7860`
 
-### 10.3 给队友集成（最推荐）
+### 10.3 方便队友集成
 
 ```python
 from src.rag.service import RAGService
@@ -467,34 +447,112 @@ print(res['evidence_raw'])
 # svc.ingest_ref('demo01', 'uploads/demo01', reset=False)
 ```
 
----
+## 11. 完整运行指令（一键复制）
 
-## 11. 常见故障排查
+```bash
+# 1. 解压项目
+mkdir -p ~/projects
+cp "/mnt/e/pythonprojects/edu_rag_final_FINAL.zip" ~/projects/
+cd ~/projects
+unzip -o edu_rag_final_FINAL.zip
 
-### 11.1 UI 报 Milvus 连接失败
+# 2. 查看实际目录名
+ls -lah ~/projects | grep edu_rag
+
+# 3. 进入文件夹
+cd ~/projects/edu_rag_FINAL
+ls
+
+# 4. 启动Milvus（使用 HNSW）
+cd ~/projects/edu_rag_FINAL
+docker compose up -d
+docker ps
+
+# 5. 激活conda环境
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate edu_rag_cpu || conda env create -f environment_wsl_cpu.yml -n edu_rag_cpu
+conda activate edu_rag_cpu
+
+conda install -y "setuptools<81"
+
+# 6. 下载模型
+export HF_ENDPOINT=https://hf-mirror.com
+pip install -U huggingface_hub
+
+python - <<'PY'
+from huggingface_hub import snapshot_download
+snapshot_download("BAAI/bge-m3", local_dir="models/bge-m3", local_dir_use_symlinks=False)
+snapshot_download("BAAI/bge-reranker-large", local_dir="models/bge-reranker-large", local_dir_use_symlinks=False)
+print("models downloaded")
+PY
+
+cd ~/projects/edu_rag_FINAL
+
+python - <<'PY'
+from huggingface_hub import snapshot_download
+
+ignore = ["**/.DS_Store", "**/.DS_Store*", "**/Thumbs.db", "**/.AppleDouble/**"]
+
+# 补全/续传 bge-m3
+snapshot_download(
+    "BAAI/bge-m3",
+    local_dir="models/bge-m3",
+    ignore_patterns=ignore,
+)
+
+# 下载 reranker
+snapshot_download(
+    "BAAI/bge-reranker-large",
+    local_dir="models/bge-reranker-large",
+    ignore_patterns=ignore,
+)
+
+print("done")
+PY
+
+# 7. 设置API环境变量
+export OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+export OPENAI_API_KEY="sk-c82d3e04c90f43a5bbc8b6c40d3a98e4"
+
+# 8. 入库
+python -m src.rag.cli ingest \
+  --dir knowledge_base \
+  --index kb \
+  --source-type knowledge_base \
+  --session-id kb \
+  --reset
+
+# 9. 询问
+python -m src.rag.cli query \
+  --question "什么是转录？" \
+  --index kb \
+  --top-k 5 \
+  --with-trace
+
+# 10. 启动UI
+python -m src.rag.ui_gradio
+# 浏览器打开：http://127.0.0.1:7860
+```
+
+## 12. 常见故障排查
+
+### 12.1 UI 报 Milvus 连接失败
 - 确认容器在跑：`docker ps`
 - 确认端口：`ss -lntp | grep 19530`
 
-### 11.2 Docker 拉镜像超时
+### 12.2 Docker 拉镜像超时
 - 配置 Docker mirror（见 6.4）
 
-### 11.3 模型下载慢
+### 12.3 模型下载慢
 - 设置 `HF_ENDPOINT=https://hf-mirror.com`
 
-### 11.4 API Key 安全
-- 不要把 `OPENAI_API_KEY` 发到聊天/截图
-- 泄露后立刻作废并重置
 
----
+## 13. 项目特点总结
 
-## 12. 你需要修改的文件清单（最终版已统一）
-
-- `src/rag/service.py`：接口层（参数兼容 + JSON 强序列化 + UI 兼容）
-- `src/rag/ui_gradio.py`：UI（与 service.py 完全匹配）
-- `src/rag/rag_engine.py`：trace 修复（`trace.as_dicts()`）
-- `config.yaml`：Milvus Standalone + HNSW + Qwen API + 多模态解析
-- `docker-compose.yml`：Milvus Standalone
-
----
-
-如果你想把 RAG 服务提供给模块二/三/四作为 HTTP 接口（FastAPI），可以在后续把 `service.py` 包装成 API（项目里已保留 FastAPI 依赖）。
+1. **稳定性优先**：所有接口强序列化，避免 JSON 解析错误
+2. **检索质量**：Hybrid + RRF + 邻近扩展 + 多样性约束 + Rerank
+3. **多模态支持**：PDF/图片/视频/音频/Word/PPT/Excel/HTML 全支持
+4. **易集成**：提供 `RAGService` 类，队友可直接调用
+5. **可追溯**：证据块带完整元数据，支持引用和回溯
+6. **配置灵活**：所有参数可在 `config.yaml` 中调整
+7. **部署简单**：Docker + Conda，环境隔离清晰
